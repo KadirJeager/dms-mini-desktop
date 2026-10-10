@@ -1,0 +1,221 @@
+{
+  "An item with this name already exists.": {
+    "An item with this name already exists.": "Bu adda bir öğe zaten var."
+  },
+  "The name is not valid.": {
+    "The name is not valid.": "Ad geçerli değil."
+  },
+  "The name is too long.": {
+    "The name is too long.": "Ad çok uzun."
+  },
+  "The file or folder could not be found.": {
+    "The file or folder could not be found.": "Dosya veya klasör bulunamadı."
+  },
+  "You do not have permission for this operation.": {
+    "You do not have permission for this operation.": "Bu işlemi yapmak için izniniz yok."
+  },
+  "There is not enough free space.": {
+    "There is not enough free space.": "Yeterli boş alan yok."
+  },
+  "The trash is not supported at this location.": {
+    "The trash is not supported at this location.": "Bu konumda çöp kutusu desteklenmiyor."
+  },
+  "The item could not be moved to the trash.": {
+    "The item could not be moved to the trash.": "Öğe çöpe taşınamadı."
+  },
+  "The clipboard is empty.": {
+    "The clipboard is empty.": "Pano boş."
+  },
+  "The clipboard content is not supported.": {
+    "The clipboard content is not supported.": "Pano içeriği desteklenmiyor."
+  },
+  "The clipboard could not be accessed.": {
+    "The clipboard could not be accessed.": "Panoya erişilemedi."
+  },
+  "The compositor does not support clipboard access.": {
+    "The compositor does not support clipboard access.": "Pencere yöneticisi panoya erişimi desteklemiyor."
+  },
+  "The web address is not valid.": {
+    "The web address is not valid.": "Web adresi geçerli değil."
+  },
+  "The application could not be found.": {
+    "The application could not be found.": "Uygulama bulunamadı."
+  },
+  "A folder cannot be placed inside itself.": {
+    "A folder cannot be placed inside itself.": "Bir klasör kendi içine yerleştirilemez."
+  },
+  "The file operation could not be completed.": {
+    "The file operation could not be completed.": "Dosya işlemi tamamlanamadı."
+  },
+  "The helper returned an invalid response.": {
+    "The helper returned an invalid response.": "Yardımcı program geçersiz bir yanıt döndürdü."
+  },
+  "An unexpected error occurred.": {
+    "An unexpected error occurred.": "Beklenmeyen bir hata oluştu."
+  },
+  "Operation failed": {
+    "Operation failed": "İşlem başarısız"
+  },
+  "%1 items could not be processed.": {
+    "%1 items could not be processed.": "%1 öğe işlenemedi."
+  },
+  "Pasted Text.txt": {
+    "Pasted Text.txt": "Yapıştırılan Metin.txt"
+  },
+  "Pasted Image": {
+    "Pasted Image": "Yapıştırılan Resim"
+  },
+  "Dropped Text.txt": {
+    "Dropped Text.txt": "Bırakılan Metin.txt"
+  },
+  "New Text Document": {
+    "New Text Document": "Yeni Metin Belgesi"
+  },
+  "New Text Document.txt": {
+    "New Text Document.txt": "Yeni Metin Belgesi.txt"
+  },
+  "New Folder": {
+    "New Folder": "Yeni Klasör"
+  },
+  "New from Template": {
+    "New from Template": "Şablondan Yeni"
+  },
+  "Create Shortcut": {
+    "Create Shortcut": "Kısayol Oluştur"
+  },
+  "Application…": {
+    "Application…": "Uygulama…"
+  },
+  "File…": {
+    "File…": "Dosya…"
+  },
+  "Folder…": {
+    "Folder…": "Klasör…"
+  },
+  "Web Address…": {
+    "Web Address…": "Web Adresi…"
+  },
+  "Paste": {
+    "Paste": "Yapıştır"
+  },
+  "Open Terminal Here": {
+    "Open Terminal Here": "Burada Terminal Aç"
+  },
+  "Open in File Manager": {
+    "Open in File Manager": "Dosya Yöneticisinde Aç"
+  },
+  "Widget Settings": {
+    "Widget Settings": "Widget Ayarları"
+  },
+  "Launch": {
+    "Launch": "Başlat"
+  },
+  "Open Link": {
+    "Open Link": "Bağlantıyı Aç"
+  },
+  "Open": {
+    "Open": "Aç"
+  },
+  "Open With…": {
+    "Open With…": "Birlikte Aç…"
+  },
+  "Cut": {
+    "Cut": "Kes"
+  },
+  "Copy": {
+    "Copy": "Kopyala"
+  },
+  "Copy Path": {
+    "Copy Path": "Yolu Kopyala"
+  },
+  "Rename": {
+    "Rename": "Yeniden Adlandır"
+  },
+  "Move to Trash": {
+    "Move to Trash": "Çöpe Taşı"
+  },
+  "Select Folder": {
+    "Select Folder": "Klasör Seç"
+  },
+  "Select File": {
+    "Select File": "Dosya Seç"
+  },
+  "Create Web Shortcut": {
+    "Create Web Shortcut": "Web Kısayolu Oluştur"
+  },
+  "Enter the web address.": {
+    "Enter the web address.": "Web adresini girin."
+  },
+  "Web address": {
+    "Web address": "Web adresi"
+  },
+  "Create": {
+    "Create": "Oluştur"
+  },
+  "Cancel": {
+    "Cancel": "İptal"
+  },
+  "No terminal application was found.": {
+    "No terminal application was found.": "Terminal uygulaması bulunamadı."
+  },
+  "Desktop is empty": {
+    "Desktop is empty": "Masaüstü boş"
+  },
+  "Desktop folder not found": {
+    "Desktop folder not found": "Masaüstü klasörü bulunamadı"
+  },
+  "Desktop folder could not be read": {
+    "Desktop folder could not be read": "Masaüstü klasörü okunamadı"
+  },
+  "Press F5 to try again.": {
+    "Press F5 to try again.": "Yeniden denemek için F5'e basın."
+  },
+  "Middle-click or right-click to create an item": {
+    "Middle-click or right-click to create an item": "Oluşturmak için orta ya da sağ tıklayın"
+  },
+  "Create or paste an item": {
+    "Create or paste an item": "Öğe oluştur veya yapıştır"
+  },
+  "Icon size": {
+    "Icon size": "Simge boyutu"
+  },
+  "Background opacity": {
+    "Background opacity": "Arka plan opaklığı"
+  },
+  "Set to 0 to show only the icons": {
+    "Set to 0 to show only the icons": "Yalnızca simgelerin görünmesi için 0 olarak ayarlayın"
+  },
+  "This folder is empty": {
+    "This folder is empty": "Bu klasör boş"
+  },
+  "Folder not found": {
+    "Folder not found": "Klasör bulunamadı"
+  },
+  "Folder could not be read": {
+    "Folder could not be read": "Klasör okunamadı"
+  },
+  "Create Folder": {
+    "Create Folder": "Klasörü Oluştur"
+  },
+  "Folder": {
+    "Folder": "Klasör"
+  },
+  "The folder this widget shows; everything created in it is saved there. Leave empty for the Desktop.": {
+    "The folder this widget shows; everything created in it is saved there. Leave empty for the Desktop.": "Bu widget'ın gösterdiği klasör; içinde oluşturulan her şey oraya kaydedilir. Boş bırakılırsa Masaüstü gösterilir."
+  },
+  "Choose…": {
+    "Choose…": "Seç…"
+  },
+  "Back to the Desktop": {
+    "Back to the Desktop": "Masaüstüne dön"
+  },
+  "Choose Folder": {
+    "Choose Folder": "Klasör Seç"
+  },
+  "Show title": {
+    "Show title": "Başlığı göster"
+  },
+  "Shows the folder name above the icons": {
+    "Shows the folder name above the icons": "Simgelerin üstünde klasörün adını gösterir"
+  }
+}
