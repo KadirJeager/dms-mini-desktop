@@ -1,8 +1,8 @@
 {
   "id": "miniDesktop",
   "name": "Mini Desktop",
-  "description": "A small desktop area for any folder: shows its files as icons, creates documents, folders and shortcuts from a context menu, with copy/paste, drag and drop and previews",
-  "version": "1.0.0",
+  "description": "A small desktop for any folder plus app shortcuts: one-click app icons on top, the folder's files below, with a context menu to create documents, folders and shortcuts, copy/paste, drag and drop and previews",
+  "version": "2.0.0",
   "author": "KadirJeager",
   "type": "desktop",
   "capabilities": [
@@ -11,7 +11,7 @@
   "component": "./MiniDesktop.qml",
   "settings": "./MiniDesktopSettings.qml",
   "icon": "desktop_windows",
-  "requires_dms": ">=1.6.0",
+  "requires_dms": ">=2.0.0",
   "requires": [
     "python3",
     "wl-paste",

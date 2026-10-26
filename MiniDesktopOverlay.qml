@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import qs.Common
 import qs.Services
 import qs.Widgets
+import qs.DCommon.Widgets
 
 // Full-screen overlay surface that hosts the context menu (with one submenu
 // level) and the in-place rename field. The widget itself lives on the bottom
@@ -27,8 +28,11 @@ PanelWindow {
     property rect renameRect: Qt.rect(0, 0, 0, 0)
     property string renameOriginal: ""
 
-    readonly property int menuWidth: 240
-    readonly property int edgeMargin: 8
+    // Same metrics as the DMS context menus, so the menu follows the shell's scaling.
+    readonly property real menuWidth: Math.max(Theme.fieldDefaultWidth, Theme.fontSizeSmall * 20)
+    readonly property real edgeMargin: Theme.spacingS
+    readonly property real rowHeight: Theme.menuItemHeight
+    readonly property real separatorHeight: Theme.spacingXS + Theme.dividerWidth
 
     signal entryTriggered(var entry)
     signal renameFinished(bool accepted, string text)
@@ -41,8 +45,8 @@ PanelWindow {
             return;
         let top = 0;
         for (let i = 0; i < submenuIndex; i++)
-            top += submenuEntries[i].separator ? 9 : 30;
-        const bottom = top + (submenuEntries[submenuIndex].separator ? 9 : 30);
+            top += submenuEntries[i].separator ? separatorHeight : rowHeight;
+        const bottom = top + (submenuEntries[submenuIndex].separator ? separatorHeight : rowHeight);
         if (top < submenuScroll.contentY)
             submenuScroll.contentY = top;
         else if (bottom > submenuScroll.contentY + submenuScroll.height)
@@ -151,9 +155,9 @@ PanelWindow {
         submenuIndex = -1;
         const rowPos = rowItem.mapToItem(contentRoot, 0, 0);
         const subHeight = Math.min(listHeight(entry.submenu), contentRoot.height - edgeMargin * 2);
-        let x = menuBox.x + menuBox.width - 4;
+        let x = menuBox.x + menuBox.width - Theme.spacingXS;
         if (x + menuWidth > contentRoot.width - edgeMargin)
-            x = menuBox.x - menuWidth + 4;
+            x = menuBox.x - menuWidth + Theme.spacingXS;
         let y = rowPos.y - Theme.spacingXS;
         y = Math.max(edgeMargin, Math.min(contentRoot.height - subHeight - edgeMargin, y));
         submenuPos = Qt.point(x, y);
@@ -169,7 +173,7 @@ PanelWindow {
     function listHeight(list) {
         let h = Theme.spacingXS * 2;
         for (let i = 0; i < list.length; i++)
-            h += list[i].separator ? 9 : 30;
+            h += list[i].separator ? separatorHeight : rowHeight;
         return h;
     }
 
@@ -206,10 +210,10 @@ PanelWindow {
 
     WindowBlur {
         targetWindow: root
-        blurX: root.mode === "menu" ? menuBox.x : renameBox.x
-        blurY: root.mode === "menu" ? menuBox.y : renameBox.y
-        blurWidth: root.visible ? (root.mode === "menu" ? menuBox.width : renameBox.width) : 0
-        blurHeight: root.visible ? (root.mode === "menu" ? menuBox.height : renameBox.height) : 0
+        blurX: root.mode === "menu" ? menuBox.x : renameInput.x
+        blurY: root.mode === "menu" ? menuBox.y : renameInput.y
+        blurWidth: root.visible ? (root.mode === "menu" ? menuBox.width : renameInput.width) : 0
+        blurHeight: root.visible ? (root.mode === "menu" ? menuBox.height : renameInput.height) : 0
         blurRadius: Theme.cornerRadius
     }
 
@@ -451,7 +455,7 @@ PanelWindow {
             id: separatorComponent
 
             Item {
-                height: 9
+                height: root.separatorHeight
 
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
@@ -459,64 +463,24 @@ PanelWindow {
                     anchors.right: parent.right
                     anchors.leftMargin: Theme.spacingS
                     anchors.rightMargin: Theme.spacingS
-                    height: 1
+                    height: Theme.dividerWidth
                     color: Theme.outlineHeavy
                 }
             }
         }
 
-        Rectangle {
-            id: renameBox
+        DTextField {
+            id: renameInput
 
             visible: root.mode === "rename"
-            width: Math.min(contentRoot.width - root.edgeMargin * 2, Math.max(root.renameRect.width, renameInput.contentWidth + Theme.spacingM * 2))
-            height: Math.max(28, renameInput.contentHeight + Theme.spacingS * 2)
+            width: Math.min(contentRoot.width - root.edgeMargin * 2, Math.max(root.renameRect.width, Theme.fontSizeSmall * 14))
             x: Math.max(root.edgeMargin, Math.min(contentRoot.width - width - root.edgeMargin, root.renameRect.x + root.renameRect.width / 2 - width / 2))
             y: Math.max(root.edgeMargin, Math.min(contentRoot.height - height - root.edgeMargin, root.renameRect.y))
-            radius: Theme.cornerRadius / 2
-            color: Theme.withAlpha(Theme.surfaceContainerHigh, Math.max(0.92, Theme.popupTransparency))
-            border.color: Theme.primary
-            border.width: 2
-
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.AllButtons
-                cursorShape: Qt.IBeamCursor
-                onPressed: mouse => {
-                    renameInput.forceActiveFocus();
-                    mouse.accepted = false;
-                }
-            }
-
-            TextInput {
-                id: renameInput
-
-                anchors.fill: parent
-                anchors.margins: Theme.spacingS
-                horizontalAlignment: TextInput.AlignHCenter
-                verticalAlignment: TextInput.AlignVCenter
-                color: Theme.surfaceText
-                selectionColor: Theme.primary
-                selectedTextColor: Theme.primaryText
-                font.pixelSize: Theme.fontSizeSmall
-                font.family: Theme.fontFamily
-                selectByMouse: true
-                clip: true
-
-                Keys.onPressed: event => {
-                    switch (event.key) {
-                    case Qt.Key_Return:
-                    case Qt.Key_Enter:
-                        root.finishRename(true);
-                        break;
-                    case Qt.Key_Escape:
-                        root.finishRename(false);
-                        break;
-                    default:
-                        return;
-                    }
-                    event.accepted = true;
-                }
+            font.pixelSize: Theme.fontSizeSmall
+            onAccepted: root.finishRename(true)
+            Keys.onEscapePressed: event => {
+                root.finishRename(false);
+                event.accepted = true;
             }
         }
     }

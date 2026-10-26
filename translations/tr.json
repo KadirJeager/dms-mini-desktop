@@ -170,12 +170,6 @@
   "Press F5 to try again.": {
     "Press F5 to try again.": "Yeniden denemek için F5'e basın."
   },
-  "Middle-click or right-click to create an item": {
-    "Middle-click or right-click to create an item": "Oluşturmak için orta ya da sağ tıklayın"
-  },
-  "Create or paste an item": {
-    "Create or paste an item": "Öğe oluştur veya yapıştır"
-  },
   "Icon size": {
     "Icon size": "Simge boyutu"
   },
@@ -217,5 +211,44 @@
   },
   "Shows the folder name above the icons": {
     "Shows the folder name above the icons": "Simgelerin üstünde klasörün adını gösterir"
+  },
+  "%1 is not allowed to run": {
+    "%1 is not allowed to run": "%1 çalıştırılmaya izinli değil"
+  },
+  "Add app": {
+    "Add app": "Uygulama ekle"
+  },
+  "Allow Launching": {
+    "Allow Launching": "Başlatmaya İzin Ver"
+  },
+  "App shortcuts": {
+    "App shortcuts": "Uygulama kısayolları"
+  },
+  "Apps shown above the folder's icons; one click opens them. Use the arrows to change their order.": {
+    "Apps shown above the folder's icons; one click opens them. Use the arrows to change their order.": "Klasördeki simgelerin üstünde gösterilen uygulamalar; tek tıkla açılır. Sırayı oklarla değiştirin."
+  },
+  "Choose Allow Launching from its menu if you trust it.": {
+    "Choose Allow Launching from its menu if you trust it.": "Güveniyorsanız menüsünden Başlatmaya İzin Ver seçeneğini kullanın."
+  },
+  "Could not open %1": {
+    "Could not open %1": "%1 açılamadı"
+  },
+  "Edit Widgets": {
+    "Edit Widgets": "Widget'ları Düzenle"
+  },
+  "Its desktop entry was not found.": {
+    "Its desktop entry was not found.": "Uygulamanın masaüstü girdisi bulunamadı."
+  },
+  "Move down": {
+    "Move down": "Aşağı taşı"
+  },
+  "Move up": {
+    "Move up": "Yukarı taşı"
+  },
+  "Remove": {
+    "Remove": "Kaldır"
+  },
+  "Right-click to create an item": {
+    "Right-click to create an item": "Öğe oluşturmak için sağ tıklayın"
   }
 }

@@ -6,6 +6,7 @@ import Quickshell.Io
 import qs.Common
 import qs.Services
 import qs.Widgets
+import qs.DCommon.Widgets
 import qs.Modules.Plugins
 import qs.Modules.Settings.Widgets
 import qs.Modals.FileBrowser
@@ -33,6 +34,10 @@ DesktopPluginComponent {
     readonly property string folderTitle: desktopDir.split("/").filter(part => part !== "").pop() || "/"
     readonly property string helperPath: localPath(Qt.resolvedUrl("helper/minidesktop.py"))
     readonly property int columns: Math.max(1, Math.floor(grid.width / Math.max(iconSize + Theme.spacingL * 2, Theme.fontSizeSmall * 8)))
+    // App shortcuts above the folder's icons: chosen in the widget settings, launched with one click.
+    readonly property var shortcuts: toArray(pluginData.shortcuts).filter(s => s && (s.desktopId || s.name))
+    // Re-evaluates icon and launch lookups once the desktop entry database (re)loads.
+    readonly property var desktopApps: DesktopEntries.applications.values
     readonly property var targetScreen: screen || root.QsWindow.window?.screen || null
 
     property var items: []
@@ -107,6 +112,46 @@ DesktopPluginComponent {
         for (let i = 0; i < value.length; i++)
             out.push(value[i]);
         return out;
+    }
+
+    function desktopEntryFor(shortcut) {
+        if (!shortcut.desktopId || desktopApps.length === 0)
+            return null;
+        return DesktopEntries.byId(shortcut.desktopId) || DesktopEntries.heuristicLookup(shortcut.desktopId);
+    }
+
+    function shortcutIcon(shortcut) {
+        if (shortcut.iconOverride)
+            return Paths.resolveIconUrl(shortcut.iconOverride);
+        const entry = desktopEntryFor(shortcut);
+        if (entry && entry.icon)
+            return Paths.resolveIconUrl(String(entry.icon));
+        return Paths.resolveIconUrl(shortcut.icon || "application-x-executable");
+    }
+
+    function launchShortcut(shortcut) {
+        const entry = desktopEntryFor(shortcut);
+        if (entry) {
+            AppUsageHistoryData.addAppUsage({
+                "id": entry.id,
+                "name": entry.name || shortcut.name,
+                "icon": entry.icon ? String(entry.icon) : "",
+                "exec": entry.exec || "",
+                "comment": entry.comment || ""
+            });
+            SessionService.launchDesktopEntry(entry);
+            return;
+        }
+        // The app's desktop entry is gone (uninstalled or renamed); use the command saved when it was added.
+        const command = toArray(shortcut.command);
+        if (command.length) {
+            SessionService.launchDesktopEntry({
+                command: command,
+                workingDirectory: homeDir
+            });
+            return;
+        }
+        ToastService.showError(I18n.trFor("miniDesktop", "Could not open %1").arg(shortcut.name), I18n.trFor("miniDesktop", "Its desktop entry was not found."));
     }
 
     function localPath(value) {
@@ -468,6 +513,10 @@ DesktopPluginComponent {
             });
             return;
         }
+        if (entry.kind === "app" && entry.trusted === false) {
+            ToastService.showWarning(I18n.trFor("miniDesktop", "%1 is not allowed to run").arg(entry.label), I18n.trFor("miniDesktop", "Choose Allow Launching from its menu if you trust it."));
+            return;
+        }
         if (entry.kind === "app") {
             SessionService.launchDesktopEntry({
                 command: entry.exec,
@@ -667,7 +716,12 @@ DesktopPluginComponent {
         }, {
             id: "settings",
             text: I18n.trFor("miniDesktop", "Widget Settings"),
-            icon: "settings"
+            icon: "tune"
+        }, {
+            // The widget takes right-clicks for its own menu, so DMS's widget menu is offered here.
+            id: "edit-widgets",
+            text: I18n.trFor("miniDesktop", "Edit Widgets"),
+            icon: "edit"
         });
         return entries;
     }
@@ -728,14 +782,23 @@ DesktopPluginComponent {
         const first = entries[0];
         const openText = first.kind === "app" ? I18n.trFor("miniDesktop", "Launch") : first.kind === "link" ? I18n.trFor("miniDesktop", "Open Link") : I18n.trFor("miniDesktop", "Open");
         const data = entries.slice();
+        const untrusted = single && first.kind === "app" && first.trusted === false;
         ++menuGeneration;
-        overlay.openMenu(targetScreen, globalPoint(cell, x, y), [
+        overlay.openMenu(targetScreen, globalPoint(cell, x, y), (untrusted ? [
+                {
+                    id: "trust",
+                    text: I18n.trFor("miniDesktop", "Allow Launching"),
+                    icon: "verified_user",
+                    bold: true,
+                    data: data
+                }
+            ] : []).concat([
             {
                 id: "open",
                 text: openText,
                 icon: "open_in_new",
-                bold: true,
-                enabled: entries.every(e => e.available !== false),
+                bold: !untrusted,
+                enabled: entries.every(e => e.available !== false && e.trusted !== false),
                 data: data
             },
             {
@@ -783,7 +846,7 @@ DesktopPluginComponent {
                 destructive: true,
                 data: data
             }
-        ]);
+        ]));
     }
 
     function create(args) {
@@ -813,15 +876,25 @@ DesktopPluginComponent {
             filePicker.open();
             break;
         case "url-link":
-            urlInput.showWithOptions({
-                title: I18n.trFor("miniDesktop", "Create Web Shortcut"),
-                message: I18n.trFor("miniDesktop", "Enter the web address."),
-                placeholder: I18n.trFor("miniDesktop", "Web address"),
-                confirmText: I18n.trFor("miniDesktop", "Create"),
-                cancelText: I18n.trFor("miniDesktop", "Cancel"),
-                onConfirm: text => create(["url-link", "--", desktopDir, text])
-            });
-            break;
+            {
+                // DMS 2.0's input dialog confirms twice on Enter (text field and dialog both
+                // accept); one dialog creates one link.
+                let confirmed = false;
+                urlInput.showWithOptions({
+                    title: I18n.trFor("miniDesktop", "Create Web Shortcut"),
+                    message: I18n.trFor("miniDesktop", "Enter the web address."),
+                    placeholder: I18n.trFor("miniDesktop", "Web address"),
+                    confirmText: I18n.trFor("miniDesktop", "Create"),
+                    cancelText: I18n.trFor("miniDesktop", "Cancel"),
+                    onConfirm: text => {
+                        if (confirmed)
+                            return;
+                        confirmed = true;
+                        create(["url-link", "--", desktopDir, text]);
+                    }
+                });
+                break;
+            }
         case "paste":
             paste();
             break;
@@ -844,7 +917,17 @@ DesktopPluginComponent {
             });
             break;
         case "settings":
-            PopoutService.openSettingsWithTab("desktop_widgets");
+            if (root.instanceId && root.targetScreen)
+                DesktopWidgetRegistry.editOptions(root.targetScreen, root.instanceId);
+            else
+                PopoutService.openSettingsWithTab("desktop_widgets");
+            break;
+        case "edit-widgets":
+            DesktopWidgetRegistry.startEditing(root.targetScreen, false);
+            break;
+        case "trust":
+            if (entries.length === 1)
+                runHelper(["trust", "--", entries[0].path]);
             break;
         case "open":
             entries.forEach(e => openItem(e));
@@ -1043,7 +1126,7 @@ DesktopPluginComponent {
         visible: !root.directoryError && !root.loading
         anchors.fill: parent
         anchors.margins: Theme.spacingS
-        anchors.topMargin: Theme.spacingS + titleBar.height
+        anchors.topMargin: Theme.spacingS + titleBar.height + shortcutBar.height
         flow: GridView.FlowLeftToRight
         layoutDirection: Qt.LeftToRight
         cellWidth: width / root.columns
@@ -1147,11 +1230,12 @@ DesktopPluginComponent {
     }
 
     Column {
-        anchors.centerIn: parent
-        width: parent.width - Theme.spacingL * 2
+        anchors.centerIn: grid
+        width: grid.width - Theme.spacingS * 2
         spacing: Theme.spacingS
-        visible: !!root.directoryError || (root.items.length === 0 && !root.loading)
-        DankIcon {
+        // An empty folder under app shortcuts needs no message; errors are always shown.
+        visible: !!root.directoryError || (root.items.length === 0 && !root.loading && root.shortcuts.length === 0)
+        DIcon {
             anchors.horizontalCenter: parent.horizontalCenter
             name: root.directoryError ? "folder_off" : "desktop_windows"
             size: root.iconSize
@@ -1175,11 +1259,11 @@ DesktopPluginComponent {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
-            text: root.directoryError ? root.desktopDir : I18n.trFor("miniDesktop", "Middle-click or right-click to create an item")
+            text: root.directoryError ? root.desktopDir : I18n.trFor("miniDesktop", "Right-click to create an item")
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.surfaceVariantText
         }
-        DankButton {
+        DButton {
             anchors.horizontalCenter: parent.horizontalCenter
             visible: root.directoryError === "not-found" && root.desktopDir !== ""
             text: I18n.trFor("miniDesktop", "Create Folder")
@@ -1206,7 +1290,7 @@ DesktopPluginComponent {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.leftMargin: Theme.spacingM
-        anchors.rightMargin: Theme.spacingM + addButton.width
+        anchors.rightMargin: Theme.spacingM
         height: root.showTitle ? Math.ceil(Theme.fontSizeMedium * 1.6) + Theme.spacingS : 0
         visible: root.showTitle
 
@@ -1222,23 +1306,123 @@ DesktopPluginComponent {
         }
     }
 
-    HoverHandler {
-        id: widgetHover
-    }
-
-    DankActionButton {
-        id: addButton
-        anchors.top: parent.top
+    // App shortcuts: above the blank-area mouse handling, so presses on them launch.
+    Item {
+        id: shortcutBar
+        anchors.top: titleBar.bottom
+        anchors.topMargin: root.shortcuts.length ? Theme.spacingS : 0
+        anchors.left: parent.left
         anchors.right: parent.right
-        anchors.margins: Theme.spacingXS
-        visible: widgetHover.hovered
-        iconName: "add"
-        iconSize: Theme.iconSizeSmall
-        tooltipText: I18n.trFor("miniDesktop", "Create or paste an item")
-        onClicked: root.openBlankMenu(addButton, width, height)
+        anchors.leftMargin: Theme.spacingS
+        anchors.rightMargin: Theme.spacingS
+        readonly property real cellHeight: root.iconSize + Theme.spacingS * 2 + Math.ceil(Theme.fontSizeSmall * 1.4)
+        readonly property int rows: Math.ceil(root.shortcuts.length / root.columns)
+        height: root.shortcuts.length ? rows * cellHeight + divider.height + Theme.spacingS : 0
+        visible: root.shortcuts.length > 0
+
+        Grid {
+            id: shortcutGrid
+            columns: root.columns
+
+            Repeater {
+                model: root.shortcuts
+
+                delegate: Item {
+                    id: shortcutCell
+
+                    required property var modelData
+
+                    width: grid.cellWidth
+                    height: shortcutBar.cellHeight
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 2
+                        radius: Theme.cornerRadius
+                        color: Theme.withAlpha(Theme.primary, shortcutMouse.pressed ? 0.20 : 0.12)
+                        opacity: shortcutMouse.containsMouse ? 1 : 0
+
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: Theme.shortDuration
+                                easing.type: Theme.standardEasing
+                            }
+                        }
+                    }
+
+                    Image {
+                        id: shortcutIcon
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.top: parent.top
+                        anchors.topMargin: Theme.spacingS
+                        width: root.iconSize
+                        height: root.iconSize
+                        scale: shortcutMouse.pressed ? 0.92 : 1
+                        source: root.shortcutIcon(shortcutCell.modelData)
+                        sourceSize.width: root.iconSize * 2
+                        sourceSize.height: root.iconSize * 2
+                        fillMode: Image.PreserveAspectFit
+                        asynchronous: true
+                        smooth: true
+                        mipmap: true
+                        onStatusChanged: {
+                            if (status === Image.Error)
+                                source = "image://icon/application-x-executable";
+                        }
+
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: Theme.shortDuration
+                                easing.type: Theme.standardEasing
+                            }
+                        }
+                    }
+
+                    StyledText {
+                        anchors.top: shortcutIcon.bottom
+                        anchors.topMargin: Theme.spacingXS
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: parent.width - Theme.spacingXS * 2
+                        horizontalAlignment: Text.AlignHCenter
+                        text: shortcutCell.modelData.name
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.surfaceText
+                        elide: Text.ElideRight
+                        maximumLineCount: 1
+                        style: root.backgroundOpacity < 0.35 ? Text.Outline : Text.Normal
+                        styleColor: Theme.withAlpha(Theme.surface, 0.55)
+                    }
+
+                    MouseArea {
+                        id: shortcutMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+                        onClicked: mouse => {
+                            if (mouse.button === Qt.LeftButton)
+                                root.launchShortcut(shortcutCell.modelData);
+                            else
+                                root.openBlankMenu(shortcutCell, mouse.x, mouse.y);
+                        }
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            id: divider
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: Theme.spacingS
+            anchors.rightMargin: Theme.spacingS
+            height: Theme.dividerWidth
+            color: Theme.withAlpha(Theme.outline, 0.3)
+        }
     }
 
-    DankSpinner {
+    DSpinner {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: Theme.spacingS
@@ -1249,6 +1433,8 @@ DesktopPluginComponent {
 
     Component.onCompleted: {
         alive = true;
+        // DMS lists installed terminals only on request; Open Terminal Here falls back to them.
+        SessionData.probeTerminals();
         restartWatcher();
         refreshTemplates();
     }

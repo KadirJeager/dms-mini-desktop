@@ -251,12 +251,24 @@ def which_exec(program):
     return shutil.which(program) is not None
 
 
+def launcher_trusted(path):
+    """A launcher runs only when it is executable, like in Nemo and Dolphin.
+
+    A downloaded .desktop file is not executable; its Name= and Icon= could make it look like a
+    document while its Exec= runs any command, so it is shown by file name until allowed.
+    """
+    return os.access(path, os.X_OK)
+
+
 def describe_desktop_file(path, item):
     try:
         kf = keyfile_for(path)
     except GLib.Error:
         return
     entry_type = kf_get(kf, "Type")
+    if entry_type == "Application" and not launcher_trusted(path):
+        item.update({"kind": "app", "trusted": False, "desktopIcon": "application-x-executable"})
+        return
     label = kf_get(kf, "Name", localized=True)
     if label:
         item["label"] = label
@@ -432,6 +444,7 @@ def describe(directory, info):
         "url": "",
         "appId": "",
         "available": True,
+        "trusted": True,
     }
     if ftype == Gio.FileType.SYMBOLIC_LINK:
         # Following the link failed: its target is gone.
@@ -1015,7 +1028,7 @@ def cmd_rename(args):
     if not os.path.lexists(path):
         raise HelperError("not-found", path)
     new_name = validate_name(args.name)
-    if path.endswith(".desktop") and os.path.isfile(path) and not os.path.islink(path):
+    if path.endswith(".desktop") and os.path.isfile(path) and not os.path.islink(path) and launcher_trusted(path):
         try:
             kf = keyfile_for(path)
             entry_type = kf_get(kf, "Type")
@@ -1046,6 +1059,19 @@ def cmd_rename(args):
     except FileExistsError:
         raise HelperError("exists", new_name)
     return {"path": dst}
+
+
+def cmd_trust(args):
+    path = os.path.abspath(args.path)
+    if not path.endswith(".desktop") or not os.path.isfile(path) or os.path.islink(path):
+        raise HelperError("not-found", path)
+    try:
+        mode = os.stat(path).st_mode & 0o7777
+        # Execute where the file can be read, as chmod +x does with the default umask.
+        os.chmod(path, mode | ((mode & 0o444) >> 2))
+    except PermissionError:
+        raise HelperError("permission", path)
+    return {"path": path}
 
 
 def cmd_trash(args):
@@ -1196,6 +1222,10 @@ def build_parser():
     p.add_argument("path")
     p.add_argument("name")
     p.set_defaults(func=cmd_rename)
+
+    p = sub.add_parser("trust")
+    p.add_argument("path")
+    p.set_defaults(func=cmd_trust)
 
     p = sub.add_parser("trash")
     p.add_argument("paths", nargs="+")

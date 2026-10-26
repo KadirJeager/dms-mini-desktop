@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import qs.Common
 import qs.Widgets
+import qs.DCommon.Widgets
 
 // One icon on the Mini Desktop grid.
 Item {
@@ -117,12 +118,32 @@ Item {
             }
         }
 
-        DankIcon {
+        DIcon {
             anchors.centerIn: parent
             visible: root.iconFailed || root.iconSource === ""
             name: root.fallbackGlyph
             size: root.iconSize * 0.9
             color: Theme.surfaceText
+        }
+
+        // A launcher that is not executable does not run until allowed from its menu.
+        Rectangle {
+            visible: root.entry.trusted === false
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            width: Math.max(14, root.iconSize * 0.34)
+            height: width
+            radius: width / 2
+            color: Theme.surfaceContainerHigh
+            border.width: 1
+            border.color: Theme.withAlpha(Theme.outline, 0.4)
+
+            DIcon {
+                anchors.centerIn: parent
+                name: "gpp_maybe"
+                size: parent.width * 0.72
+                color: Theme.warning
+            }
         }
 
         Rectangle {
@@ -136,7 +157,7 @@ Item {
             border.width: 1
             border.color: Theme.withAlpha(Theme.outline, 0.4)
 
-            DankIcon {
+            DIcon {
                 anchors.centerIn: parent
                 name: root.entry.kind === "broken" ? "link_off" : "arrow_outward"
                 size: parent.width * 0.72
