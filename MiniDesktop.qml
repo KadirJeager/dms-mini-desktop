@@ -39,8 +39,15 @@ DesktopPluginComponent {
     // Re-evaluates icon and launch lookups once the desktop entry database (re)loads.
     readonly property var desktopApps: DesktopEntries.applications.values
     readonly property var targetScreen: screen || root.QsWindow.window?.screen || null
+    // Folders come first except in "manual", where items keep the order they were dragged into.
+    readonly property string sortBy: ["name", "type", "modified", "size", "manual"].includes(pluginData.sortBy) ? pluginData.sortBy : "name"
+    readonly property var manualOrder: toArray(pluginData.order)
 
+    // The helper's listing, folders first and by name; items is that listing in sortBy order.
+    property var listedItems: []
     property var items: []
+    property bool internalDrag: false
+    property int dropSlot: -1
     property var selection: ({})
     property int currentIndex: -1
     property string rangeAnchor: ""
@@ -66,6 +73,12 @@ DesktopPluginComponent {
             activeFocusShown = false;
     }
 
+    onSortByChanged: updateItems(listedItems)
+    onManualOrderChanged: {
+        if (sortBy === "manual")
+            updateItems(listedItems);
+    }
+
     function boundedSetting(value, fallback, minimum, maximum) {
         const n = Number(value ?? fallback);
         return Number.isFinite(n) ? Math.round(Math.max(minimum, Math.min(maximum, n))) : fallback;
@@ -89,6 +102,7 @@ DesktopPluginComponent {
         if (!alive)
             return;
         overlay.close();
+        listedItems = [];
         items = [];
         selection = {};
         cutPaths = {};
@@ -395,7 +409,8 @@ DesktopPluginComponent {
         const currentPath = items[currentIndex]?.path;
         const present = {};
         list.forEach(e => present[e.path] = true);
-        items = list;
+        listedItems = list;
+        items = sortedItems(list);
         selection = existingMap(selection, present);
         cutPaths = existingMap(cutPaths, present);
         currentIndex = currentPath ? indexOfPath(currentPath) : -1;
@@ -439,6 +454,67 @@ DesktopPluginComponent {
             pendingRename = "";
             Qt.callLater(() => beginRename(path));
         }
+    }
+
+    function sortedItems(list) {
+        const rank = new Map(list.map((e, i) => [e.path, i]));
+        const byName = (a, b) => rank.get(a.path) - rank.get(b.path);
+        const folderFirst = (a, b) => (a.kind === "folder" ? 0 : 1) - (b.kind === "folder" ? 0 : 1);
+        let compare;
+        switch (sortBy) {
+        case "type":
+            compare = (a, b) => folderFirst(a, b) || String(a.mime || "").localeCompare(String(b.mime || "")) || byName(a, b);
+            break;
+        case "modified":
+            compare = (a, b) => folderFirst(a, b) || (Number(b.modified) || 0) - (Number(a.modified) || 0) || byName(a, b);
+            break;
+        case "size":
+            compare = (a, b) => folderFirst(a, b) || (a.kind === "folder" ? 0 : (Number(b.size) || 0) - (Number(a.size) || 0)) || byName(a, b);
+            break;
+        case "manual":
+            {
+                // Items the order does not know yet (new files) follow, by name.
+                const position = new Map(manualOrder.map((name, i) => [name, i]));
+                const at = e => position.has(e.name) ? position.get(e.name) : manualOrder.length + rank.get(e.path);
+                compare = (a, b) => at(a) - at(b);
+                break;
+            }
+        default:
+            return list;
+        }
+        return list.slice().sort(compare);
+    }
+
+    function saveSettings(updates) {
+        if (isInstance)
+            SettingsData.updateDesktopWidgetInstanceConfig(instanceId, updates);
+        else
+            Object.keys(updates).forEach(key => setData(key, updates[key]));
+    }
+
+    // The insertion position in items for a point in grid coordinates: before or after the
+    // cell under it, by which half the point is in.
+    function slotAt(x, y) {
+        const column = Math.max(0, Math.min(columns - 1, Math.floor(x / grid.cellWidth)));
+        const row = Math.max(0, Math.floor((y + grid.contentY - grid.originY) / grid.cellHeight));
+        const after = x - column * grid.cellWidth > grid.cellWidth / 2 ? 1 : 0;
+        return Math.min(items.length, row * columns + column + after);
+    }
+
+    // Dragging items within the widget arranges them by hand from then on.
+    function arrangeSelection(slot) {
+        const moving = selectedEntries();
+        if (!moving.length)
+            return;
+        const isMoving = {};
+        moving.forEach(e => isMoving[e.path] = true);
+        const order = items.slice(0, slot).filter(e => !isMoving[e.path]).concat(moving, items.slice(slot).filter(e => !isMoving[e.path])).map(e => e.name);
+        if (sortBy === "manual" && order.join("/") === items.map(e => e.name).join("/"))
+            return;
+        saveSettings({
+            sortBy: "manual",
+            order: order
+        });
     }
 
     function selectedEntries() {
@@ -583,6 +659,7 @@ DesktopPluginComponent {
         if (!selection[entry.path] && index >= 0)
             selectOnly(index);
         const entries = selectedEntries();
+        internalDrag = true;
         return {
             "text/uri-list": entries.map(e => e.uri).join("\r\n") + "\r\n",
             "text/plain": entries.map(e => e.path).join("\n")
@@ -692,6 +769,15 @@ DesktopPluginComponent {
                     icon: "language"
                 }
             ]
+        }, {
+            text: I18n.trFor("miniDesktop", "Sort By"),
+            icon: "sort",
+            submenu: [["name", I18n.trFor("miniDesktop", "Name")], ["type", I18n.trFor("miniDesktop", "Type")], ["modified", I18n.trFor("miniDesktop", "Date Modified")], ["size", I18n.trFor("miniDesktop", "Size")], ["manual", I18n.trFor("miniDesktop", "Manual")]].map(([key, text]) => ({
+                        id: "sort",
+                        text: text,
+                        icon: sortBy === key ? "check" : "",
+                        data: key
+                    }))
         }, {
             separator: true
         }, {
@@ -897,6 +983,11 @@ DesktopPluginComponent {
             }
         case "paste":
             paste();
+            break;
+        case "sort":
+            saveSettings({
+                sortBy: entry.data
+            });
             break;
         case "terminal":
             {
@@ -1113,15 +1204,32 @@ DesktopPluginComponent {
     }
 
     DropArea {
+        id: widgetDrop
         anchors.fill: parent
         onEntered: drag => {
-            if (!root.canDropOn(drag, root.desktopDir))
+            if (!root.internalDrag && !root.canDropOn(drag, root.desktopDir))
                 drag.accepted = false;
         }
-        onDropped: drop => root.handleDrop(drop, root.desktopDir)
+        onPositionChanged: drag => {
+            if (root.internalDrag) {
+                const point = grid.mapFromItem(widgetDrop, drag.x, drag.y);
+                root.dropSlot = root.slotAt(point.x, point.y);
+            }
+        }
+        onExited: root.dropSlot = -1
+        onDropped: drop => {
+            root.dropSlot = -1;
+            if (!root.internalDrag) {
+                root.handleDrop(drop, root.desktopDir);
+                return;
+            }
+            const point = grid.mapFromItem(widgetDrop, drop.x, drop.y);
+            drop.accept(Qt.MoveAction);
+            root.arrangeSelection(root.slotAt(point.x, point.y));
+        }
     }
 
-    GridView {
+    DGridView {
         id: grid
         visible: !root.directoryError && !root.loading
         anchors.fill: parent
@@ -1139,11 +1247,6 @@ DesktopPluginComponent {
             desktop: root
         }
         interactive: !blankMouse.pressed && contentHeight > height
-        boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: ScrollBar {
-            id: scrollBar
-            policy: ScrollBar.AsNeeded
-        }
     }
 
     // Above the view: reject presses over cells so their MouseAreas receive them.
@@ -1161,6 +1264,7 @@ DesktopPluginComponent {
 
         onPressed: mouse => {
             const point = grid.mapFromItem(blankMouse, mouse.x, mouse.y);
+            const scrollBar = grid.ScrollBar.vertical;
             const barPoint = scrollBar.mapFromItem(blankMouse, mouse.x, mouse.y);
             if ((scrollBar.visible && barPoint.x >= 0 && barPoint.x < scrollBar.width) || (grid.visible && point.x >= 0 && point.x < grid.width && point.y >= 0 && point.y < grid.height && grid.indexAt(point.x + grid.contentX, point.y + grid.contentY) >= 0)) {
                 mouse.accepted = false;
@@ -1226,6 +1330,23 @@ DesktopPluginComponent {
             color: Theme.withAlpha(Theme.primary, 0.16)
             border.width: 1
             border.color: Theme.withAlpha(Theme.primary, 0.7)
+        }
+    }
+
+    // Where dragged items will land when arranged by hand.
+    Item {
+        anchors.fill: grid
+        clip: true
+        visible: root.internalDrag && root.dropSlot >= 0 && widgetDrop.containsDrag
+        Rectangle {
+            readonly property int row: Math.floor(root.dropSlot / root.columns)
+            readonly property int column: root.dropSlot % root.columns
+            x: column * grid.cellWidth - width / 2
+            y: row * grid.cellHeight - grid.contentY + grid.originY + Theme.spacingXS
+            width: Theme.spacingXS
+            height: grid.cellHeight - Theme.spacingXS * 2
+            radius: width / 2
+            color: Theme.primary
         }
     }
 

@@ -250,5 +250,29 @@
   },
   "Right-click to create an item": {
     "Right-click to create an item": "Öğe oluşturmak için sağ tıklayın"
+  },
+  "Sort By": {
+    "Sort By": "Sırala"
+  },
+  "Name": {
+    "Name": "Ad"
+  },
+  "Type": {
+    "Type": "Tür"
+  },
+  "Date Modified": {
+    "Date Modified": "Değiştirilme Tarihi"
+  },
+  "Size": {
+    "Size": "Boyut"
+  },
+  "Manual": {
+    "Manual": "Elle"
+  },
+  "Sort by": {
+    "Sort by": "Sıralama"
+  },
+  "Dragging an item to another place in the widget switches to Manual": {
+    "Dragging an item to another place in the widget switches to Manual": "Bir öğeyi widget içinde başka bir yere sürüklemek sıralamayı Elle yapar"
   }
 }

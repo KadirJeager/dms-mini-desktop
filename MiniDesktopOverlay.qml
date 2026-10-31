@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
 import qs.Common
@@ -404,17 +403,13 @@ PanelWindow {
             }
 
             // Template directories can contain more entries than fit on screen.
-            Flickable {
+            DFlickable {
                 id: submenuScroll
                 anchors.fill: parent
                 anchors.margins: Theme.spacingXS
                 contentWidth: width
                 contentHeight: submenuColumn.implicitHeight
                 clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AsNeeded
-                }
 
                 Column {
                     id: submenuColumn

@@ -292,6 +292,35 @@ PluginSettings {
         defaultValue: false
     }
 
+    SelectionSetting {
+        settingKey: "sortBy"
+        label: I18n.trFor("miniDesktop", "Sort by")
+        description: I18n.trFor("miniDesktop", "Dragging an item to another place in the widget switches to Manual")
+        defaultValue: "name"
+        options: [
+            {
+                label: I18n.trFor("miniDesktop", "Name"),
+                value: "name"
+            },
+            {
+                label: I18n.trFor("miniDesktop", "Type"),
+                value: "type"
+            },
+            {
+                label: I18n.trFor("miniDesktop", "Date Modified"),
+                value: "modified"
+            },
+            {
+                label: I18n.trFor("miniDesktop", "Size"),
+                value: "size"
+            },
+            {
+                label: I18n.trFor("miniDesktop", "Manual"),
+                value: "manual"
+            }
+        ]
+    }
+
     SliderSetting {
         settingKey: "iconSize"
         label: I18n.trFor("miniDesktop", "Icon size")

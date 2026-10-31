@@ -260,6 +260,8 @@ Item {
         Drag.onDragFinished: dropAction => {
             dragProxy.x = 0;
             dragProxy.y = 0;
+            root.desktop.internalDrag = false;
+            root.desktop.dropSlot = -1;
         }
     }
 

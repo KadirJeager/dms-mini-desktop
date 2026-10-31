@@ -8,11 +8,12 @@ A desktop widget for [DankMaterialShell](https://github.com/AvengeMedia/DankMate
 
 - **App shortcuts:** pick apps in the widget settings; their icons sit in a row above the folder's items and open with one click (through DMS's launcher, so your launch prefix applies). Add, remove and reorder them in the settings; a widget can also show only shortcuts or only the folder.
 - Shows the Desktop folder (`xdg-user-dir DESKTOP`) by default, or **any folder per widget**: add several widgets, each with its own folder, optionally titled with the folder name.
-- **Blank-area menu:** New Text Document, New Folder, New from Template (files in `~/Templates`), Create Shortcut (application, file, folder, web address), Paste, Open Terminal Here, Open in File Manager, Widget Settings, Edit Widgets.
+- **Blank-area menu:** New Text Document, New Folder, New from Template (files in `~/Templates`), Create Shortcut (application, file, folder, web address), Sort By, Paste, Open Terminal Here, Open in File Manager, Widget Settings, Edit Widgets.
 - **Item menu:** Open / Launch, Open With (DMS application picker), Cut, Copy, Copy Path, Rename, Move to Trash. Nothing is ever deleted permanently.
 - **Launchers are safe:** a `.desktop` launcher runs only when it is executable, as in Nemo and Dolphin. One that is not (a downloaded file, for example) is shown by its file name with a warning badge and runs only after **Allow Launching** from its menu. Shortcuts created by the widget are executable.
 - New items are selected and their name opens for editing right away. Renaming a `.desktop` launcher changes its visible name, like Nemo does.
 - Copy and cut put files on the Wayland clipboard in the formats GTK, Nemo, Nautilus, Dolphin and KDE apps read; paste accepts files, images, links and text.
+- **Sorting:** by name, type, date modified or size (folders first), or **Manual**: drag an item to another place in the widget and the arrangement is kept; new files join at the end. Choosing Manual again brings back the last arrangement.
 - Drag and drop: from your file manager into the widget or onto a folder icon, between widgets, and out of the widget into other apps.
 - Selection with Ctrl/Shift and rubber band; keyboard: Ctrl+A/C/X/V, Delete, F2, Enter, arrows, Esc, Menu / Shift+F10, F5.
 - Image previews, and thumbnails for videos and other types through the system thumbnailers.
@@ -31,6 +32,7 @@ Each widget instance has its own settings (**Widget Settings** in its menu, or *
 - **App shortcuts** — add apps, change their order with the arrows, remove them.
 - **Folder** — type a path (`~/Desktop/Games`) or pick one with **Choose…**; empty means the Desktop. If the folder does not exist, the widget offers to create it.
 - **Show title** — the folder name above the icons (off by default).
+- **Sort by** — name, type, date modified, size or manual (also in the blank-area menu).
 - **Icon size** and **Background opacity** (0 shows only the icons).
 
 ## Installation
