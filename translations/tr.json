@@ -274,5 +274,17 @@
   },
   "Dragging an item to another place in the widget switches to Free Placement": {
     "Dragging an item to another place in the widget switches to Free Placement": "Bir öğeyi widget içinde başka bir yere sürüklemek serbest yerleşime geçirir"
+  },
+  "Change Icon…": {
+    "Change Icon…": "Simgeyi Değiştir…"
+  },
+  "Reset Icon": {
+    "Reset Icon": "Simgeyi Sıfırla"
+  },
+  "Choose Icon": {
+    "Choose Icon": "Simge Seç"
+  },
+  "Choose a PNG, SVG, JPEG, WebP, ICO or XPM image.": {
+    "Choose a PNG, SVG, JPEG, WebP, ICO or XPM image.": "PNG, SVG, JPEG, WebP, ICO ya da XPM bir resim seçin."
   }
 }

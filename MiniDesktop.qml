@@ -72,6 +72,10 @@ DesktopPluginComponent {
     property bool pasteAvailable: false
     property int menuGeneration: 0
     property point blankMenuPosition: Qt.point(0, 0)
+    // Entries shown above the blank-area ones (an app shortcut's own entries).
+    property var blankMenuPrefix: []
+    // What the icon picker is choosing an icon for: {path} of a launcher or {shortcut: index}.
+    property var iconTarget: null
     // Creating needs only an existing folder, not a finished listing.
     readonly property bool menuWritable: desktopDir !== "" && !directoryError
 
@@ -228,6 +232,8 @@ DesktopPluginComponent {
             return I18n.trFor("miniDesktop", "The compositor does not support clipboard access.");
         case "invalid-url":
             return I18n.trFor("miniDesktop", "The web address is not valid.");
+        case "not-an-image":
+            return I18n.trFor("miniDesktop", "Choose a PNG, SVG, JPEG, WebP, ICO or XPM image.");
         case "app-not-found":
             return I18n.trFor("miniDesktop", "The application could not be found.");
         case "into-itself":
@@ -915,7 +921,7 @@ DesktopPluginComponent {
     function refreshBlankMenu(generation) {
         if (generation !== menuGeneration || !overlay.visible || overlay.mode !== "menu")
             return;
-        const next = blankEntries();
+        const next = blankMenuPrefix.concat(blankEntries());
         if (next.length !== overlay.entries.length)
             return; // template row appeared or vanished; shown on the next open
         overlay.updateEntries(next);
@@ -932,15 +938,16 @@ DesktopPluginComponent {
         });
     }
 
-    function openBlankMenu(item, x, y) {
+    function openBlankMenu(item, x, y, prefix) {
         takeFocus();
         activeFocusShown = false;
         if (!targetScreen)
             return;
         const generation = ++menuGeneration;
         blankMenuPosition = globalPoint(item, x, y);
+        blankMenuPrefix = prefix || [];
         // Last known paste state and templates show at once; fresh answers follow.
-        overlay.openMenu(targetScreen, blankMenuPosition, blankEntries());
+        overlay.openMenu(targetScreen, blankMenuPosition, blankMenuPrefix.concat(blankEntries()));
         runHelper(["paste-info"], result => {
             if (generation !== menuGeneration)
                 return;
@@ -951,6 +958,69 @@ DesktopPluginComponent {
             refreshBlankMenu(generation);
         });
         refreshTemplates(generation);
+    }
+
+    // An app shortcut's menu: its own icon entries, then the blank-area menu.
+    function openShortcutMenu(index, cell, x, y) {
+        const shortcut = shortcuts[index];
+        if (!shortcut)
+            return;
+        openBlankMenu(cell, x, y, [
+            {
+                id: "shortcut-icon",
+                text: I18n.trFor("miniDesktop", "Change Icon…"),
+                icon: "image",
+                data: index
+            },
+            {
+                id: "shortcut-icon-reset",
+                text: I18n.trFor("miniDesktop", "Reset Icon"),
+                icon: "restart_alt",
+                enabled: !!shortcut.iconOverride,
+                data: index
+            },
+            {
+                separator: true
+            }
+        ]);
+    }
+
+    function chooseIcon(target) {
+        iconTarget = target;
+        iconPicker.open();
+    }
+
+    function applyIcon(image) {
+        const target = iconTarget;
+        iconTarget = null;
+        if (!target)
+            return;
+        if (target.path) {
+            runHelper(["set-icon", "--", target.path].concat(image ? [image] : []));
+            return;
+        }
+        const setOverride = icon => {
+            // Shortcuts are matched by index and app at save time: the list may have changed meanwhile.
+            const list = shortcuts.map(s => Object.assign({}, s));
+            const shortcut = list[target.shortcut];
+            if (!shortcut || shortcut.desktopId !== target.desktopId)
+                return;
+            if (icon)
+                shortcut.iconOverride = icon;
+            else
+                delete shortcut.iconOverride;
+            saveSettings({
+                shortcuts: list
+            });
+        };
+        if (!image) {
+            setOverride("");
+            return;
+        }
+        runHelper(["store-icon", "--", image], result => {
+            if (result.ok)
+                setOverride(result.path);
+        });
     }
 
     function openItemMenu(index, cell, x, y) {
@@ -1019,7 +1089,22 @@ DesktopPluginComponent {
                 icon: "edit",
                 enabled: single,
                 data: data
+            }
+        ], single && first.isDesktopFile && first.trusted !== false ? [
+            {
+                id: "item-icon",
+                text: I18n.trFor("miniDesktop", "Change Icon…"),
+                icon: "image",
+                data: data
             },
+            {
+                id: "item-icon-reset",
+                text: I18n.trFor("miniDesktop", "Reset Icon"),
+                icon: "restart_alt",
+                enabled: first.customIcon === true,
+                data: data
+            }
+        ] : [], [
             {
                 separator: true
             },
@@ -1147,6 +1232,36 @@ DesktopPluginComponent {
         case "trash":
             trashEntries(entries);
             break;
+        case "item-icon":
+            if (entries.length === 1)
+                chooseIcon({
+                    path: entries[0].path
+                });
+            break;
+        case "item-icon-reset":
+            if (entries.length === 1) {
+                iconTarget = {
+                    path: entries[0].path
+                };
+                applyIcon("");
+            }
+            break;
+        case "shortcut-icon":
+        case "shortcut-icon-reset":
+            {
+                const shortcut = shortcuts[entry.data];
+                if (!shortcut)
+                    break;
+                iconTarget = {
+                    shortcut: entry.data,
+                    desktopId: shortcut.desktopId
+                };
+                if (entry.id === "shortcut-icon")
+                    iconPicker.open();
+                else
+                    applyIcon("");
+                break;
+            }
         }
     }
 
@@ -1181,6 +1296,19 @@ DesktopPluginComponent {
             const target = path.startsWith("file://") ? root.localPath(path) : path;
             root.create(["file-link", "--", root.desktopDir, target]);
         }
+    }
+
+    FileBrowserSurfaceModal {
+        id: iconPicker
+        targetScreen: root.targetScreen
+        browserTitle: I18n.trFor("miniDesktop", "Choose Icon")
+        bucket: "profile"
+        filters: ["*.png", "*.svg", "*.svgz", "*.jpg", "*.jpeg", "*.webp", "*.ico", "*.xpm", "*.bmp", "*.gif"]
+        onFileSelected: path => {
+            close();
+            root.applyIcon(path.startsWith("file://") ? root.localPath(path) : path);
+        }
+        onRejected: root.iconTarget = null
     }
 
     InputModal {
@@ -1564,6 +1692,7 @@ DesktopPluginComponent {
                     id: shortcutCell
 
                     required property var modelData
+                    required property int index
 
                     width: grid.cellWidth
                     height: shortcutBar.cellHeight
@@ -1636,7 +1765,7 @@ DesktopPluginComponent {
                             if (mouse.button === Qt.LeftButton)
                                 root.launchShortcut(shortcutCell.modelData);
                             else
-                                root.openBlankMenu(shortcutCell, mouse.x, mouse.y);
+                                root.openShortcutMenu(shortcutCell.index, shortcutCell, mouse.x, mouse.y);
                         }
                     }
                 }

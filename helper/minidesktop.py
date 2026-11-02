@@ -275,6 +275,7 @@ def describe_desktop_file(path, item):
     icon = kf_get(kf, "Icon", localized=True)
     item["desktopIcon"] = icon
     item["isDesktopFile"] = True
+    item["customIcon"] = kf.has_group("Desktop Entry") and ORIGINAL_ICON_KEY in kf.get_keys("Desktop Entry")[0]
     if entry_type == "Link":
         item["kind"] = "link"
         item["url"] = kf_get(kf, "URL")
@@ -1061,6 +1062,92 @@ def cmd_rename(args):
     return {"path": dst}
 
 
+# Icons chosen for shortcuts are copied here, so they survive the original being moved or deleted.
+ICON_STORE = os.path.join(GLib.get_user_data_dir(), "mini-desktop", "icons")
+ICON_TYPES = {".png", ".svg", ".svgz", ".jpg", ".jpeg", ".webp", ".ico", ".xpm", ".bmp", ".gif"}
+# The launcher's own Icon= and Icon[lang]= lines before it was changed here, as a JSON
+# object, so Reset Icon can bring them back.
+ORIGINAL_ICON_KEY = "X-MiniDesktop-OriginalIcon"
+
+
+def store_icon(source):
+    source = os.path.abspath(source)
+    ext = os.path.splitext(source)[1].lower()
+    if ext not in ICON_TYPES:
+        raise HelperError("not-an-image", source)
+    if not os.path.isfile(source):
+        raise HelperError("not-found", source)
+    if os.path.dirname(source) == ICON_STORE:
+        return source
+    digest = hashlib.sha256()
+    try:
+        with open(source, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 16), b""):
+                digest.update(chunk)
+        os.makedirs(ICON_STORE, exist_ok=True)
+        target = os.path.join(ICON_STORE, digest.hexdigest()[:32] + ext)
+        if not os.path.exists(target):
+            tmp = target + ".minidesktop-tmp"
+            shutil.copyfile(source, tmp)
+            os.replace(tmp, target)
+    except OSError as e:
+        raise HelperError(os_error_code(e), source)
+    return target
+
+
+def cmd_store_icon(args):
+    return {"path": store_icon(args.image)}
+
+
+def cmd_set_icon(args):
+    """Sets (or with an empty image, resets) the icon of a launcher in the folder."""
+    path = os.path.abspath(args.path)
+    if not path.endswith(".desktop") or not os.path.isfile(path) or os.path.islink(path):
+        raise HelperError("not-found", path)
+    if not launcher_trusted(path):
+        raise HelperError("permission", path)
+    try:
+        kf = keyfile_for(path)
+    except GLib.Error:
+        raise HelperError("io", path)
+    group = "Desktop Entry"
+    if not kf.has_group(group) or kf_get(kf, "Type") not in ("Application", "Link"):
+        raise HelperError("not-found", path)
+    keys = kf.get_keys(group)[0]
+    icon_keys = [k for k in keys if k == "Icon" or k.startswith("Icon[")]
+    if args.image:
+        icon = store_icon(args.image)
+        if ORIGINAL_ICON_KEY not in keys:
+            kf.set_string(group, ORIGINAL_ICON_KEY, json.dumps({k: kf.get_string(group, k) for k in icon_keys}, ensure_ascii=False))
+        # A localized Icon[xx] would win over the plain one.
+        for key in icon_keys:
+            kf.remove_key(group, key)
+        kf.set_string(group, "Icon", icon)
+    elif ORIGINAL_ICON_KEY in keys:
+        try:
+            original = json.loads(kf.get_string(group, ORIGINAL_ICON_KEY))
+        except ValueError:
+            original = {}
+        for key in icon_keys:
+            kf.remove_key(group, key)
+        for key, value in (original.items() if isinstance(original, dict) else ()):
+            if isinstance(value, str) and (key == "Icon" or key.startswith("Icon[")):
+                kf.set_string(group, key, value)
+        kf.remove_key(group, ORIGINAL_ICON_KEY)
+    else:
+        return {"path": path}
+    tmp = path + ".minidesktop-tmp"
+    try:
+        mode = os.stat(path).st_mode & 0o7777
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(kf.to_data()[0])
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except OSError as e:
+        raise HelperError(os_error_code(e), path)
+    return {"path": path}
+
+
 def cmd_trust(args):
     path = os.path.abspath(args.path)
     if not path.endswith(".desktop") or not os.path.isfile(path) or os.path.islink(path):
@@ -1226,6 +1313,15 @@ def build_parser():
     p = sub.add_parser("trust")
     p.add_argument("path")
     p.set_defaults(func=cmd_trust)
+
+    p = sub.add_parser("set-icon")
+    p.add_argument("path")
+    p.add_argument("image", nargs="?", default="")
+    p.set_defaults(func=cmd_set_icon)
+
+    p = sub.add_parser("store-icon")
+    p.add_argument("image")
+    p.set_defaults(func=cmd_store_icon)
 
     p = sub.add_parser("trash")
     p.add_argument("paths", nargs="+")
