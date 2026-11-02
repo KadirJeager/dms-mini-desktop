@@ -1165,9 +1165,11 @@ DesktopPluginComponent {
         }
     }
 
+    // No parent window: a layer surface cannot parent a toplevel, and a Qt transient child keeps
+    // the widget window "active" while the picker holds the keyboard, so DMS would keep the
+    // widget asking for the keyboard and the pointer passing over it would take the typing away.
     AppBrowserPopup {
         id: appPicker
-        parentModal: root.QsWindow.window
         onAppSelected: appId => root.create(["app-shortcut", "--", root.desktopDir, appId])
     }
 
