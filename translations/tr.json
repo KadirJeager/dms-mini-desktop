@@ -266,13 +266,13 @@
   "Size": {
     "Size": "Boyut"
   },
-  "Manual": {
-    "Manual": "Elle"
-  },
   "Sort by": {
     "Sort by": "Sıralama"
   },
-  "Dragging an item to another place in the widget switches to Manual": {
-    "Dragging an item to another place in the widget switches to Manual": "Bir öğeyi widget içinde başka bir yere sürüklemek sıralamayı Elle yapar"
+  "Free Placement": {
+    "Free Placement": "Serbest yerleşim"
+  },
+  "Dragging an item to another place in the widget switches to Free Placement": {
+    "Dragging an item to another place in the widget switches to Free Placement": "Bir öğeyi widget içinde başka bir yere sürüklemek serbest yerleşime geçirir"
   }
 }

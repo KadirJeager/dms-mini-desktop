@@ -39,15 +39,22 @@ DesktopPluginComponent {
     // Re-evaluates icon and launch lookups once the desktop entry database (re)loads.
     readonly property var desktopApps: DesktopEntries.applications.values
     readonly property var targetScreen: screen || root.QsWindow.window?.screen || null
-    // Folders come first except in "manual", where items keep the order they were dragged into.
+    // Folders come first except in "manual", where each item stays in the cell it was dragged to
+    // and empty cells may lie between items.
     readonly property string sortBy: ["name", "type", "modified", "size", "manual"].includes(pluginData.sortBy) ? pluginData.sortBy : "name"
     readonly property var manualOrder: toArray(pluginData.order)
+    // File name -> [column, row] of its cell in manual mode.
+    readonly property var manualPositions: pluginData.positions && typeof pluginData.positions === "object" && !isList(pluginData.positions) ? pluginData.positions : ({})
 
     // The helper's listing, folders first and by name; items is that listing in sortBy order.
+    // In manual mode items is the grid cell by cell: empty cells hold {gap: true} placeholders.
     property var listedItems: []
     property var items: []
     property bool internalDrag: false
+    // The cell under the pointer while items are dragged within the widget, and the item
+    // the drag started on (the others keep their place relative to it).
     property int dropSlot: -1
+    property string dragAnchorPath: ""
     property var selection: ({})
     property int currentIndex: -1
     property string rangeAnchor: ""
@@ -75,6 +82,15 @@ DesktopPluginComponent {
 
     onSortByChanged: updateItems(listedItems)
     onManualOrderChanged: {
+        if (sortBy === "manual")
+            updateItems(listedItems);
+    }
+    onManualPositionsChanged: {
+        if (sortBy === "manual")
+            updateItems(listedItems);
+    }
+    // Cells are kept as column and row, so the grid is laid out again when the width changes.
+    onColumnsChanged: {
         if (sortBy === "manual")
             updateItems(listedItems);
     }
@@ -472,17 +488,52 @@ DesktopPluginComponent {
             compare = (a, b) => folderFirst(a, b) || (a.kind === "folder" ? 0 : (Number(b.size) || 0) - (Number(a.size) || 0)) || byName(a, b);
             break;
         case "manual":
-            {
-                // Items the order does not know yet (new files) follow, by name.
-                const position = new Map(manualOrder.map((name, i) => [name, i]));
-                const at = e => position.has(e.name) ? position.get(e.name) : manualOrder.length + rank.get(e.path);
-                compare = (a, b) => at(a) - at(b);
-                break;
-            }
+            return arrangedItems(list);
         default:
             return list;
         }
         return list.slice().sort(compare);
+    }
+
+    function isGap(entry) {
+        return !entry || entry.gap === true;
+    }
+
+    // Manual mode: every item in its saved cell, empty cells between them as gaps. Items
+    // without a cell (new files, or a cell beyond the current width) take the first free
+    // cells, in the older drag order and then by name.
+    function arrangedItems(list) {
+        const rank = new Map(list.map((e, i) => [e.path, i]));
+        const position = new Map(manualOrder.map((name, i) => [name, i]));
+        const at = e => position.has(e.name) ? position.get(e.name) : manualOrder.length + rank.get(e.path);
+        const ordered = list.slice().sort((a, b) => at(a) - at(b));
+        const cells = [];
+        const unplaced = [];
+        ordered.forEach(entry => {
+            const saved = toArray(manualPositions[entry.name]);
+            const column = Number(saved[0]);
+            const row = Number(saved[1]);
+            const valid = saved.length === 2 && Number.isInteger(column) && Number.isInteger(row) && column >= 0 && row >= 0 && column < columns;
+            const slot = valid ? row * columns + column : -1;
+            if (slot >= 0 && !cells[slot])
+                cells[slot] = entry;
+            else
+                unplaced.push(entry);
+        });
+        let free = 0;
+        unplaced.forEach(entry => {
+            while (cells[free])
+                free++;
+            cells[free] = entry;
+        });
+        const out = [];
+        for (let i = 0; i < cells.length; i++)
+            out.push(cells[i] || {
+                gap: true,
+                path: "#gap-" + i,
+                name: ""
+            });
+        return out;
     }
 
     function saveSettings(updates) {
@@ -492,33 +543,77 @@ DesktopPluginComponent {
             Object.keys(updates).forEach(key => setData(key, updates[key]));
     }
 
-    // The insertion position in items for a point in grid coordinates: before or after the
-    // cell under it, by which half the point is in.
+    // The grid cell (row * columns + column) under a point in grid coordinates.
     function slotAt(x, y) {
         const column = Math.max(0, Math.min(columns - 1, Math.floor(x / grid.cellWidth)));
         const row = Math.max(0, Math.floor((y + grid.contentY - grid.originY) / grid.cellHeight));
-        const after = x - column * grid.cellWidth > grid.cellWidth / 2 ? 1 : 0;
-        return Math.min(items.length, row * columns + column + after);
+        return row * columns + column;
     }
 
-    // Dragging items within the widget arranges them by hand from then on.
+    // The item index under a point in the view's content coordinates, or -1 over an empty cell.
+    function entryIndexAt(x, y) {
+        const index = grid.indexAt(x, y);
+        return index >= 0 && !isGap(items[index]) ? index : -1;
+    }
+
+    // Dragging items within the widget places them by hand from then on: the dragged item
+    // goes to the cell it is dropped on, the other selected items keep their place relative
+    // to it, and nothing else moves. A cell that is taken passes the item to the next free one.
     function arrangeSelection(slot) {
         const moving = selectedEntries();
-        if (!moving.length)
+        if (!moving.length || slot < 0)
             return;
         const isMoving = {};
         moving.forEach(e => isMoving[e.path] = true);
-        const order = items.slice(0, slot).filter(e => !isMoving[e.path]).concat(moving, items.slice(slot).filter(e => !isMoving[e.path])).map(e => e.name);
-        if (sortBy === "manual" && order.join("/") === items.map(e => e.name).join("/"))
+        const anchorIndex = Math.max(0, indexOfPath(isMoving[dragAnchorPath] ? dragAnchorPath : moving[0].path));
+        const shiftColumn = slot % columns - anchorIndex % columns;
+        const shiftRow = Math.floor(slot / columns) - Math.floor(anchorIndex / columns);
+        const taken = [];
+        const positions = {};
+        // Every item keeps the cell it is shown in now, so a sorted view becomes the start of
+        // the hand-made one.
+        items.forEach((entry, index) => {
+            if (isGap(entry) || isMoving[entry.path])
+                return;
+            taken[index] = true;
+            positions[entry.name] = [index % columns, Math.floor(index / columns)];
+        });
+        moving.map(entry => {
+            const index = indexOfPath(entry.path);
+            const column = Math.max(0, Math.min(columns - 1, index % columns + shiftColumn));
+            const row = Math.max(0, Math.floor(index / columns) + shiftRow);
+            return [entry, row * columns + column];
+        }).sort((a, b) => a[1] - b[1]).forEach(([entry, wanted]) => {
+            let cell = wanted;
+            while (taken[cell])
+                cell++;
+            taken[cell] = true;
+            positions[entry.name] = [cell % columns, Math.floor(cell / columns)];
+        });
+        const before = JSON.stringify(items.filter(e => !isGap(e)).map(e => [e.name, indexOfPath(e.path)]));
+        const after = JSON.stringify(items.filter(e => !isGap(e)).map(e => [e.name, positions[e.name][1] * columns + positions[e.name][0]]));
+        if (sortBy === "manual" && before === after)
             return;
+        // order keeps the reading order too, for widgets that are not yet laid out by cell.
+        const order = Object.keys(positions).sort((a, b) => (positions[a][1] - positions[b][1]) || (positions[a][0] - positions[b][0]));
         saveSettings({
             sortBy: "manual",
+            positions: positions,
             order: order
         });
     }
 
     function selectedEntries() {
-        return items.filter(e => selection[e.path]);
+        return items.filter(e => !isGap(e) && selection[e.path]);
+    }
+
+    // The nearest item from index in steps of delta, skipping empty cells; -1 if there is none.
+    function stepFrom(index, delta) {
+        for (let next = index + delta; next >= 0 && next < items.length; next += delta) {
+            if (!isGap(items[next]))
+                return next;
+        }
+        return -1;
     }
 
     function takeFocus() {
@@ -526,7 +621,7 @@ DesktopPluginComponent {
     }
 
     function selectOnly(index) {
-        if (index < 0 || index >= items.length)
+        if (index < 0 || index >= items.length || isGap(items[index]))
             return;
         selection = {
             [items[index].path]: true
@@ -541,8 +636,10 @@ DesktopPluginComponent {
             anchor = currentIndex >= 0 ? currentIndex : index;
         rangeAnchor = items[anchor].path;
         const next = additive ? Object.assign({}, selection) : {};
-        for (let i = Math.min(anchor, index); i <= Math.max(anchor, index); i++)
-            next[items[i].path] = true;
+        for (let i = Math.min(anchor, index); i <= Math.max(anchor, index); i++) {
+            if (!isGap(items[i]))
+                next[items[i].path] = true;
+        }
         selection = next;
         currentIndex = index;
     }
@@ -659,6 +756,7 @@ DesktopPluginComponent {
         if (!selection[entry.path] && index >= 0)
             selectOnly(index);
         const entries = selectedEntries();
+        dragAnchorPath = entry.path;
         internalDrag = true;
         return {
             "text/uri-list": entries.map(e => e.uri).join("\r\n") + "\r\n",
@@ -772,7 +870,7 @@ DesktopPluginComponent {
         }, {
             text: I18n.trFor("miniDesktop", "Sort By"),
             icon: "sort",
-            submenu: [["name", I18n.trFor("miniDesktop", "Name")], ["type", I18n.trFor("miniDesktop", "Type")], ["modified", I18n.trFor("miniDesktop", "Date Modified")], ["size", I18n.trFor("miniDesktop", "Size")], ["manual", I18n.trFor("miniDesktop", "Manual")]].map(([key, text]) => ({
+            submenu: [["name", I18n.trFor("miniDesktop", "Name")], ["type", I18n.trFor("miniDesktop", "Type")], ["modified", I18n.trFor("miniDesktop", "Date Modified")], ["size", I18n.trFor("miniDesktop", "Size")], ["manual", I18n.trFor("miniDesktop", "Free Placement")]].map(([key, text]) => ({
                         id: "sort",
                         text: text,
                         icon: sortBy === key ? "check" : "",
@@ -1096,10 +1194,13 @@ DesktopPluginComponent {
         root.activeFocusShown = true;
         if (ctrl && event.key === Qt.Key_A) {
             const next = {};
-            root.items.forEach(e => next[e.path] = true);
+            root.items.forEach(e => {
+                if (!root.isGap(e))
+                    next[e.path] = true;
+            });
             root.selection = next;
             if (root.currentIndex < 0 && root.items.length)
-                root.currentIndex = 0;
+                root.currentIndex = root.stepFrom(-1, 1);
         } else if (ctrl && event.key === Qt.Key_C) {
             root.copyEntries(root.selectedEntries(), false);
         } else if (ctrl && event.key === Qt.Key_X) {
@@ -1130,7 +1231,10 @@ DesktopPluginComponent {
                     if (!root.items.length)
                         break;
                     const delta = event.key === Qt.Key_Left ? -1 : event.key === Qt.Key_Right ? 1 : event.key === Qt.Key_Up ? -root.columns : root.columns;
-                    const next = root.currentIndex < 0 ? 0 : Math.max(0, Math.min(root.items.length - 1, root.currentIndex + delta));
+                    // Over empty cells the move goes on to the next item in that direction.
+                    let next = root.currentIndex < 0 ? root.stepFrom(-1, 1) : root.stepFrom(root.currentIndex, delta);
+                    if (next < 0)
+                        next = root.currentIndex < 0 ? 0 : root.currentIndex;
                     if (shift)
                         root.selectRange(next, ctrl);
                     else if (ctrl)
@@ -1185,6 +1289,8 @@ DesktopPluginComponent {
         const top = Math.min(blankMouse.startPoint.y, blankMouse.pointer.y + grid.contentY);
         const bottom = Math.max(blankMouse.startPoint.y, blankMouse.pointer.y + grid.contentY);
         items.forEach((entry, index) => {
+            if (isGap(entry))
+                return;
             const x = (index % columns) * grid.cellWidth;
             const y = grid.originY + Math.floor(index / columns) * grid.cellHeight;
             if (right > x + 2 && left < x + grid.cellWidth - 2 && bottom > y + 2 && top < y + grid.cellHeight - 2)
@@ -1245,6 +1351,8 @@ DesktopPluginComponent {
         currentIndex: root.currentIndex
         delegate: MiniDesktopItem {
             desktop: root
+            visible: !root.isGap(modelData)
+            enabled: visible
         }
         interactive: !blankMouse.pressed && contentHeight > height
     }
@@ -1266,7 +1374,7 @@ DesktopPluginComponent {
             const point = grid.mapFromItem(blankMouse, mouse.x, mouse.y);
             const scrollBar = grid.ScrollBar.vertical;
             const barPoint = scrollBar.mapFromItem(blankMouse, mouse.x, mouse.y);
-            if ((scrollBar.visible && barPoint.x >= 0 && barPoint.x < scrollBar.width) || (grid.visible && point.x >= 0 && point.x < grid.width && point.y >= 0 && point.y < grid.height && grid.indexAt(point.x + grid.contentX, point.y + grid.contentY) >= 0)) {
+            if ((scrollBar.visible && barPoint.x >= 0 && barPoint.x < scrollBar.width) || (grid.visible && point.x >= 0 && point.x < grid.width && point.y >= 0 && point.y < grid.height && root.entryIndexAt(point.x + grid.contentX, point.y + grid.contentY) >= 0)) {
                 mouse.accepted = false;
                 return;
             }
@@ -1333,7 +1441,7 @@ DesktopPluginComponent {
         }
     }
 
-    // Where dragged items will land when arranged by hand.
+    // The cell the dragged item will land in when placed by hand.
     Item {
         anchors.fill: grid
         clip: true
@@ -1341,12 +1449,14 @@ DesktopPluginComponent {
         Rectangle {
             readonly property int row: Math.floor(root.dropSlot / root.columns)
             readonly property int column: root.dropSlot % root.columns
-            x: column * grid.cellWidth - width / 2
-            y: row * grid.cellHeight - grid.contentY + grid.originY + Theme.spacingXS
-            width: Theme.spacingXS
-            height: grid.cellHeight - Theme.spacingXS * 2
-            radius: width / 2
-            color: Theme.primary
+            x: column * grid.cellWidth + 2
+            y: row * grid.cellHeight - grid.contentY + grid.originY + 2
+            width: grid.cellWidth - 4
+            height: grid.cellHeight - 4
+            radius: Theme.cornerRadius
+            color: Theme.withAlpha(Theme.primary, 0.12)
+            border.width: 1
+            border.color: Theme.withAlpha(Theme.primary, 0.7)
         }
     }
 

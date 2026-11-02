@@ -295,7 +295,7 @@ PluginSettings {
     SelectionSetting {
         settingKey: "sortBy"
         label: I18n.trFor("miniDesktop", "Sort by")
-        description: I18n.trFor("miniDesktop", "Dragging an item to another place in the widget switches to Manual")
+        description: I18n.trFor("miniDesktop", "Dragging an item to another place in the widget switches to Free Placement")
         defaultValue: "name"
         options: [
             {
@@ -315,7 +315,7 @@ PluginSettings {
                 value: "size"
             },
             {
-                label: I18n.trFor("miniDesktop", "Manual"),
+                label: I18n.trFor("miniDesktop", "Free Placement"),
                 value: "manual"
             }
         ]

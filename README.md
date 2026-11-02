@@ -13,7 +13,7 @@ A desktop widget for [DankMaterialShell](https://github.com/AvengeMedia/DankMate
 - **Launchers are safe:** a `.desktop` launcher runs only when it is executable, as in Nemo and Dolphin. One that is not (a downloaded file, for example) is shown by its file name with a warning badge and runs only after **Allow Launching** from its menu. Shortcuts created by the widget are executable.
 - New items are selected and their name opens for editing right away. Renaming a `.desktop` launcher changes its visible name, like Nemo does.
 - Copy and cut put files on the Wayland clipboard in the formats GTK, Nemo, Nautilus, Dolphin and KDE apps read; paste accepts files, images, links and text.
-- **Sorting:** by name, type, date modified or size (folders first), or **Manual**: drag an item to another place in the widget and the arrangement is kept; new files join at the end. Choosing Manual again brings back the last arrangement.
+- **Sorting:** by name, type, date modified or size (folders first), or **Free Placement**: drag an item to any cell in the widget, empty cells included, and it stays there; other selected items keep their place relative to it, and nothing else moves. New files take the first free cell. Choosing Free Placement again brings back the last layout.
 - Drag and drop: from your file manager into the widget or onto a folder icon, between widgets, and out of the widget into other apps.
 - Selection with Ctrl/Shift and rubber band; keyboard: Ctrl+A/C/X/V, Delete, F2, Enter, arrows, Esc, Menu / Shift+F10, F5.
 - Image previews, and thumbnails for videos and other types through the system thumbnailers.
@@ -32,7 +32,7 @@ Each widget instance has its own settings (**Widget Settings** in its menu, or *
 - **App shortcuts** — add apps, change their order with the arrows, remove them.
 - **Folder** — type a path (`~/Desktop/Games`) or pick one with **Choose…**; empty means the Desktop. If the folder does not exist, the widget offers to create it.
 - **Show title** — the folder name above the icons (off by default).
-- **Sort by** — name, type, date modified, size or manual (also in the blank-area menu).
+- **Sort by** — name, type, date modified, size or free placement (also in the blank-area menu).
 - **Icon size** and **Background opacity** (0 shows only the icons).
 
 ## Installation
