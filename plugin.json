@@ -2,7 +2,7 @@
   "id": "miniDesktop",
   "name": "Mini Desktop",
   "description": "A small desktop for any folder plus app shortcuts: one-click app icons on top, the folder's files below, with a context menu to create documents, folders and shortcuts, copy/paste, drag and drop and previews",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "author": "KadirJeager",
   "type": "desktop",
   "capabilities": [

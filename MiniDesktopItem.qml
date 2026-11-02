@@ -244,8 +244,11 @@ Item {
     // Invisible drag source: files dragged out land in file managers, browsers and chat apps.
     Item {
         id: dragProxy
-        width: root.iconSize
-        height: root.iconSize
+        // The drag image is the icon at the size it is shown: an image file or a large app
+        // icon would otherwise be dragged at its full resolution. Fitted, keeping its shape.
+        readonly property real aspect: icon.implicitWidth > 0 && icon.implicitHeight > 0 ? icon.implicitWidth / icon.implicitHeight : 1
+        width: Math.round(aspect >= 1 ? root.iconSize : root.iconSize * aspect)
+        height: Math.round(aspect >= 1 ? root.iconSize / aspect : root.iconSize)
         property var mimeData: ({})
         property bool mimeReady: false
 
@@ -255,6 +258,7 @@ Item {
         Drag.proposedAction: Qt.CopyAction
         Drag.mimeData: mimeData
         Drag.imageSource: icon.source
+        Drag.imageSourceSize: Qt.size(width, height)
         Drag.hotSpot.x: width / 2
         Drag.hotSpot.y: height / 2
         Drag.onDragFinished: dropAction => {
