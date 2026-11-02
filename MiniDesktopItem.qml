@@ -185,7 +185,7 @@ Item {
         anchors.topMargin: Theme.spacingXS
         anchors.horizontalCenter: parent.horizontalCenter
         width: parent.width - Theme.spacingXS * 2
-        text: root.entry.label
+        text: root.entry.label ?? ""
         horizontalAlignment: Text.AlignHCenter
         font.pixelSize: Theme.fontSizeSmall
         color: Theme.surfaceText
